@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.infrastructure.adapters.output.mysql.connection import ping_mysql
+from app.infrastructure.adapters.output.mysql.connection import ping_postgres
 from app.infrastructure.composition import CompositionRoot
 
 
@@ -9,13 +9,13 @@ def create_health_router(container: CompositionRoot) -> APIRouter:
 
     @router.get("/health")
     def health() -> dict[str, str]:
-        mysql_status = "connected" if ping_mysql(container.settings) else "disconnected"
+        postgres_status = "connected" if ping_postgres(container.settings) else "disconnected"
         return {
             "status": "ok",
             "service": container.settings.app_name,
             "phase": "1",
             "architecture": "hexagonal",
-            "mysql": mysql_status,
+            "postgres": postgres_status,
         }
 
     return router

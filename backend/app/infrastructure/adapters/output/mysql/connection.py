@@ -6,13 +6,13 @@ from app.infrastructure.config.settings import Settings, get_settings
 
 
 class Base(DeclarativeBase):
-    """Declarative base de SQLAlchemy. Solo debe usarse en infraestructura MySQL."""
+    """Declarative base de SQLAlchemy."""
 
 
-def create_mysql_engine(settings: Settings | None = None) -> Engine:
+def create_postgres_engine(settings: Settings | None = None) -> Engine:
     current = settings or get_settings()
     return create_engine(
-        current.mysql_url,
+        current.postgres_url,
         pool_pre_ping=True,
         future=True,
         connect_args={"connect_timeout": 3},
@@ -20,13 +20,18 @@ def create_mysql_engine(settings: Settings | None = None) -> Engine:
 
 
 def create_session_factory(settings: Settings | None = None) -> sessionmaker:
-    engine = create_mysql_engine(settings)
-    return sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    engine = create_postgres_engine(settings)
+    return sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+    )
 
 
-def ping_mysql(settings: Settings | None = None) -> bool:
+def ping_postgres(settings: Settings | None = None) -> bool:
     try:
-        engine = create_mysql_engine(settings)
+        engine = create_postgres_engine(settings)
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return True

@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
-    mysql_host: str = "localhost"
-    mysql_port: int = 3306
-    mysql_user: str = "root"
-    mysql_password: str = ""
-    mysql_database: str = "agro_asistente"
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    postgres_user: str = "postgres"
+    postgres_password: str = ""
+    postgres_database: str = "agro_asistente"
 
     jwt_secret: str = "change-me-in-local-env-do-not-use-in-production"
     jwt_algorithm: str = "HS256"
@@ -57,18 +57,20 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
-    def mysql_url(self) -> str:
-        user = quote_plus((self.mysql_user or "").strip())
-        password = quote_plus(self.mysql_password) if self.mysql_password else ""
-        host = (self.mysql_host or "localhost").strip()
-        database = (self.mysql_database or "").strip()
+    def postgres_url(self) -> str:
+        user = quote_plus((self.postgres_user or "").strip())
+        password = quote_plus(self.postgres_password) if self.postgres_password else ""
+        host = (self.postgres_host or "localhost").strip()
+        database = (self.postgres_database or "").strip()
+
         if password:
             auth = f"{user}:{password}"
         else:
             auth = user
+
         return (
-            f"mysql+pymysql://{auth}@{host}:{self.mysql_port}/"
-            f"{database}?charset=utf8mb4"
+            f"postgresql+psycopg://{auth}@{host}:{self.postgres_port}/"
+            f"{database}"
         )
 
 
