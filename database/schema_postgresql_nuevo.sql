@@ -1,4 +1,4 @@
-============================================================
+--============================================================
 -- Base de datos: slm_agricultura_familiar
 -- Proyecto: SLM peruano para asistencia técnica a agricultores familiares
 -- Motor: PostgreSQL
@@ -47,6 +47,7 @@ CREATE TABLE agricultor (
     telefono        VARCHAR(30),
     ubicacion       VARCHAR(200),
     experiencia_anios SMALLINT,
+    id_cultivo_seleccionado UUID NULL DEFAULT NULL,
     CONSTRAINT fk_agricultor_usuario
         FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario)
         ON UPDATE CASCADE
@@ -90,25 +91,41 @@ CREATE TABLE parcela (
         ON UPDATE CASCADE
         ON DELETE CASCADE,
     CONSTRAINT ck_parcela_superficie
-        CHECK (superficie IS NULL OR superficie >= 0)
+        CHECK (superficie IS NULL OR superficie >= 0),
+    CONSTRAINT uq_parcela_propietario
+        UNIQUE (id_parcela, id_agricultor)
 );
 
 CREATE TABLE cultivo (
     id_cultivo      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     id_parcela      UUID NOT NULL,
+    id_agricultor   UUID NOT NULL,
     nombre_comun    VARCHAR(120) NOT NULL,
     nombre_cientifico VARCHAR(180),
     fecha_siembra   DATE,
     fecha_cosecha   DATE,
     estado          VARCHAR(50),
     observaciones   TEXT,
-    CONSTRAINT fk_cultivo_parcela
-        FOREIGN KEY (id_parcela) REFERENCES parcela(id_parcela)
-        ON UPDATE CASCADE
+    fecha_creacion  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_cultivo_parcela_propietario
+        FOREIGN KEY (id_parcela, id_agricultor)
+        REFERENCES parcela(id_parcela, id_agricultor)
+        ON UPDATE RESTRICT
         ON DELETE CASCADE,
+    CONSTRAINT uq_cultivo_propietario
+        UNIQUE (id_cultivo, id_agricultor),
     CONSTRAINT ck_fechas_cultivo
         CHECK (fecha_cosecha IS NULL OR fecha_siembra IS NULL OR fecha_cosecha >= fecha_siembra)
 );
+
+-- La referencia se agrega después de crear cultivo para resolver el ciclo.
+-- Al borrar el cultivo solo se limpia la selección, nunca el ID del agricultor.
+ALTER TABLE agricultor
+    ADD CONSTRAINT fk_agricultor_cultivo_seleccionado
+    FOREIGN KEY (id_cultivo_seleccionado, id_agricultor)
+    REFERENCES cultivo(id_cultivo, id_agricultor)
+    ON UPDATE RESTRICT
+    ON DELETE SET NULL (id_cultivo_seleccionado);
 
 CREATE TABLE registro_cultivo (
     id_registro     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -290,6 +307,9 @@ CREATE INDEX idx_parcela_agricultor
 
 CREATE INDEX idx_cultivo_parcela
     ON cultivo(id_parcela);
+
+CREATE INDEX idx_cultivo_agricultor_fecha
+    ON cultivo(id_agricultor, fecha_creacion DESC, id_cultivo);
 
 CREATE INDEX idx_registro_cultivo_fecha
     ON registro_cultivo(id_cultivo, fecha_registro DESC);

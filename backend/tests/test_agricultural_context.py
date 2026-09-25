@@ -47,8 +47,8 @@ class RepositorioContextoEnMemoria(PuertoRepositorioContextoAgricola):
         return objetivo
 
 
-FARMER_A = "farmer-a"
-FARMER_B = "farmer-b"
+FARMER_A = "6ffb54e1-6e78-4eb3-b9ed-5db6b6786faa"
+FARMER_B = "628bfb8f-deed-48a6-b9bb-dff4ca9410e1"
 
 
 def _create(

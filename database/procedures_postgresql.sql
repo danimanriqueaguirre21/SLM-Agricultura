@@ -4,6 +4,10 @@
 -- HU-01 a HU-06
 -- NOTA: password_hash llega ya hasheado desde backend.
 -- FAISS realiza la búsqueda vectorial; PostgreSQL conserva metadatos, fragmentos y trazabilidad.
+-- Requiere el DDL actualizado de schema_postgresql_nuevo.sql.
+-- Las funciones de listado y detalle amplían RETURNS TABLE. Si ya están
+-- instaladas con la firma de retorno anterior, requieren una migración explícita
+-- que revise dependencias y las recree; CREATE OR REPLACE no cambia ese retorno.
 
 BEGIN;
 
@@ -137,17 +141,23 @@ CREATE OR REPLACE FUNCTION sp_registrar_cultivo(
 RETURNS UUID
 LANGUAGE plpgsql
 AS $$
-DECLARE v_id UUID;
+DECLARE
+    v_id UUID;
+    v_id_agricultor UUID;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM parcela WHERE id_parcela=p_id_parcela) THEN
+    SELECT p.id_agricultor INTO v_id_agricultor
+    FROM parcela p
+    WHERE p.id_parcela=p_id_parcela
+    FOR KEY SHARE;
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'Parcela no encontrada';
     END IF;
     IF NULLIF(BTRIM(p_nombre_comun),'') IS NULL THEN
         RAISE EXCEPTION 'El nombre del cultivo es obligatorio';
     END IF;
 
-    INSERT INTO cultivo(id_parcela,nombre_comun,nombre_cientifico,fecha_siembra,fecha_cosecha,estado,observaciones)
-    VALUES(p_id_parcela,BTRIM(p_nombre_comun),NULLIF(BTRIM(p_nombre_cientifico),''),
+    INSERT INTO cultivo(id_parcela,id_agricultor,nombre_comun,nombre_cientifico,fecha_siembra,fecha_cosecha,estado,observaciones)
+    VALUES(p_id_parcela,v_id_agricultor,BTRIM(p_nombre_comun),NULLIF(BTRIM(p_nombre_cientifico),''),
            p_fecha_siembra,p_fecha_cosecha,NULLIF(BTRIM(p_estado),''),
            NULLIF(BTRIM(p_observaciones),''))
     RETURNING id_cultivo INTO v_id;
@@ -165,16 +175,22 @@ RETURNS TABLE(
     parcela VARCHAR,
     ubicacion VARCHAR,
     tipo_suelo VARCHAR,
-    altitud NUMERIC
+    altitud NUMERIC,
+    observaciones TEXT,
+    fecha_creacion TIMESTAMPTZ,
+    esta_seleccionado BOOLEAN
 )
 LANGUAGE sql
 AS $$
     SELECT c.id_cultivo,c.nombre_comun,c.nombre_cientifico,c.estado,
-           p.id_parcela,p.nombre,p.ubicacion,p.tipo_suelo,p.altitud
+           p.id_parcela,p.nombre,p.ubicacion,p.tipo_suelo,p.altitud,
+           c.observaciones,c.fecha_creacion,
+           COALESCE(a.id_cultivo_seleccionado=c.id_cultivo,FALSE)
     FROM cultivo c
-    JOIN parcela p ON p.id_parcela=c.id_parcela
-    WHERE p.id_agricultor=p_id_agricultor
-    ORDER BY c.nombre_comun;
+    JOIN parcela p ON p.id_parcela=c.id_parcela AND p.id_agricultor=c.id_agricultor
+    JOIN agricultor a ON a.id_agricultor=c.id_agricultor
+    WHERE c.id_agricultor=p_id_agricultor
+    ORDER BY c.fecha_creacion DESC,c.id_cultivo;
 $$;
 
 CREATE OR REPLACE FUNCTION sp_obtener_contexto_cultivo(p_id_agricultor UUID,p_id_cultivo UUID)
@@ -188,17 +204,82 @@ RETURNS TABLE(
     ubicacion VARCHAR,
     superficie NUMERIC,
     tipo_suelo VARCHAR,
-    altitud NUMERIC
+    altitud NUMERIC,
+    observaciones TEXT,
+    fecha_creacion TIMESTAMPTZ,
+    esta_seleccionado BOOLEAN
 )
 LANGUAGE sql
 AS $$
     SELECT c.id_cultivo,c.nombre_comun,c.nombre_cientifico,c.estado,
-           p.id_parcela,p.nombre,p.ubicacion,p.superficie,p.tipo_suelo,p.altitud
+           p.id_parcela,p.nombre,p.ubicacion,p.superficie,p.tipo_suelo,p.altitud,
+           c.observaciones,c.fecha_creacion,
+           COALESCE(a.id_cultivo_seleccionado=c.id_cultivo,FALSE)
     FROM cultivo c
-    JOIN parcela p ON p.id_parcela=c.id_parcela
+    JOIN parcela p ON p.id_parcela=c.id_parcela AND p.id_agricultor=c.id_agricultor
+    JOIN agricultor a ON a.id_agricultor=c.id_agricultor
     WHERE c.id_cultivo=p_id_cultivo
-      AND p.id_agricultor=p_id_agricultor
+      AND c.id_agricultor=p_id_agricultor
     LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION sp_seleccionar_cultivo(
+    p_id_agricultor UUID,
+    p_id_cultivo UUID
+)
+RETURNS UUID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_id_agricultor IS NULL OR p_id_cultivo IS NULL THEN
+        RAISE EXCEPTION 'El agricultor y el cultivo son obligatorios'
+            USING ERRCODE = '22004';
+    END IF;
+
+    -- Las selecciones concurrentes actualizan la misma fila del agricultor.
+    -- La FK compuesta garantiza pertenencia incluso fuera de esta función.
+    UPDATE agricultor a
+       SET id_cultivo_seleccionado=p_id_cultivo
+     WHERE a.id_agricultor=p_id_agricultor
+       AND EXISTS (
+           SELECT 1 FROM cultivo c
+           WHERE c.id_cultivo=p_id_cultivo
+             AND c.id_agricultor=a.id_agricultor
+       );
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Cultivo no encontrado para el agricultor'
+            USING ERRCODE = 'P0002';
+    END IF;
+
+    RETURN p_id_cultivo;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION sp_obtener_contexto_seleccionado(p_id_agricultor UUID)
+RETURNS TABLE(
+    id_cultivo UUID,
+    nombre_comun VARCHAR,
+    nombre_cientifico VARCHAR,
+    estado_cultivo VARCHAR,
+    id_parcela UUID,
+    parcela VARCHAR,
+    ubicacion VARCHAR,
+    superficie NUMERIC,
+    tipo_suelo VARCHAR,
+    altitud NUMERIC,
+    observaciones TEXT,
+    fecha_creacion TIMESTAMPTZ,
+    esta_seleccionado BOOLEAN
+)
+LANGUAGE sql
+AS $$
+    SELECT contexto.*
+    FROM agricultor a
+    CROSS JOIN LATERAL sp_obtener_contexto_cultivo(
+        a.id_agricultor,a.id_cultivo_seleccionado
+    ) AS contexto
+    WHERE a.id_agricultor=p_id_agricultor
+      AND a.id_cultivo_seleccionado IS NOT NULL;
 $$;
 
 -- HU-04 CONSULTA AGRÍCOLA

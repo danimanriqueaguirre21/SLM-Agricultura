@@ -60,8 +60,8 @@ from app.infrastructure.adapters.output.mysql.repositorio_agricultor import (
     RepositorioAgricultorPostgresql,
 )
 from app.infrastructure.adapters.output.mysql.repositorio_consulta import RepositorioConsultaMysql
-from app.infrastructure.adapters.output.mysql.repositorio_contexto_agricola import (
-    RepositorioContextoAgricolaMysql,
+from app.infrastructure.adapters.output.mysql.repositorio_contexto_agricola_postgresql import (
+    RepositorioContextoAgricolaPostgresql,
 )
 from app.infrastructure.adapters.output.mysql.repositorio_documento_conocimiento import (
     RepositorioDocumentoConocimientoMysql,
@@ -97,7 +97,7 @@ class CompositionRoot:
             RepositorioAgricultorPostgresql(session_factory)
         )
         self.puerto_repositorio_contexto_agricola: PuertoRepositorioContextoAgricola = (
-            RepositorioContextoAgricolaMysql(session_factory)
+            RepositorioContextoAgricolaPostgresql(session_factory)
         )
         self.puerto_registrar_agricultor: PuertoRegistrarAgricultor = RegistrarAgricultor(
             repositorio_agricultor=self.puerto_repositorio_agricultor,

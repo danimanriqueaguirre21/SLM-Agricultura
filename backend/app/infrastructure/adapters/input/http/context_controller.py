@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from app.domain.exceptions import (
@@ -48,16 +51,17 @@ def _context_response(resultado: ResultadoContextoAgricola) -> AgriculturalConte
 
 def create_context_router(container: CompositionRoot) -> APIRouter:
     router = APIRouter(prefix="/api/v1/contexts", tags=["contexts"])
+    bearer = HTTPBearer(auto_error=False)
 
     def current_farmer_id(
-        authorization: str | None = Header(default=None),
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     ) -> str:
-        if not authorization or not authorization.lower().startswith("bearer "):
+        if credentials is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="No autenticado",
             )
-        token = authorization.split(" ", 1)[1].strip()
+        token = credentials.credentials.strip()
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -70,7 +74,13 @@ def create_context_router(container: CompositionRoot) -> APIRouter:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=str(error),
             ) from error
-        return identity.agricultor_id
+        try:
+            return str(UUID(identity.agricultor_id))
+        except (ValueError, TypeError, AttributeError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No autenticado",
+            ) from error
 
     @router.post(
         "",
@@ -114,12 +124,12 @@ def create_context_router(container: CompositionRoot) -> APIRouter:
         response_model=AgriculturalContextResponse,
     )
     def select_context(
-        context_id: str,
+        context_id: UUID,
         farmer_id: str = Depends(current_farmer_id),
     ) -> AgriculturalContextResponse:
         command = ComandoSeleccionarContextoAgricola(
             agricultor_id=farmer_id,
-            contexto_id=context_id,
+            contexto_id=str(context_id),
         )
         try:
             result = container.puerto_seleccionar_contexto_agricola.ejecutar(command)
