@@ -57,7 +57,7 @@ from app.infrastructure.adapters.output.generation.adaptador_generacion_plantill
 )
 from app.infrastructure.adapters.output.mysql.connection import create_session_factory
 from app.infrastructure.adapters.output.mysql.repositorio_agricultor import (
-    RepositorioAgricultorMysql,
+    RepositorioAgricultorPostgresql,
 )
 from app.infrastructure.adapters.output.mysql.repositorio_consulta import RepositorioConsultaMysql
 from app.infrastructure.adapters.output.mysql.repositorio_contexto_agricola import (
@@ -94,7 +94,7 @@ class CompositionRoot:
         )
         session_factory = create_session_factory(self.settings)
         self.puerto_repositorio_agricultor: PuertoRepositorioAgricultor = (
-            RepositorioAgricultorMysql(session_factory)
+            RepositorioAgricultorPostgresql(session_factory)
         )
         self.puerto_repositorio_contexto_agricola: PuertoRepositorioContextoAgricola = (
             RepositorioContextoAgricolaMysql(session_factory)

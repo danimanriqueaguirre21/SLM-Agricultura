@@ -7,7 +7,10 @@ from app.domain.entities.agricultor import Agricultor
 from app.domain.exceptions import ErrorCorreoInvalido, ErrorCredencialesInvalidas
 from app.domain.ports.input.iniciar_sesion_agricultor_port import ComandoIniciarSesionAgricultor
 from app.domain.ports.output.hasher_contrasena_port import PuertoHasherContrasena
-from app.domain.ports.output.repositorio_agricultor_port import PuertoRepositorioAgricultor
+from app.domain.ports.output.repositorio_agricultor_port import (
+    DatosAutenticacionAgricultor,
+    PuertoRepositorioAgricultor,
+)
 from app.domain.ports.output.token_issuer_port import PuertoEmisorToken
 from app.domain.valueObjects.email import Email
 from app.domain.valueObjects.hash_contrasena import HashContrasena
@@ -16,15 +19,27 @@ from app.domain.valueObjects.hash_contrasena import HashContrasena
 class RepositorioAgricultorEnMemoria(PuertoRepositorioAgricultor):
     def __init__(self) -> None:
         self.agricultores: list[Agricultor] = []
+        self.accesos: list[str] = []
 
     def existe_por_correo(self, email: Email) -> bool:
         return any(agricultor.email == email for agricultor in self.agricultores)
 
-    def buscar_por_correo(self, email: Email) -> Agricultor | None:
+    def buscar_por_correo(self, email: Email) -> DatosAutenticacionAgricultor | None:
         for agricultor in self.agricultores:
             if agricultor.email == email:
-                return agricultor
+                return DatosAutenticacionAgricultor(
+                    id_usuario="5c5193a8-56d1-496f-8c73-bf1b5c430124",
+                    id_agricultor=agricultor.id,
+                    rol="AGRICULTOR",
+                    nombre=agricultor.nombre_completo,
+                    email=agricultor.email,
+                    hash_contrasena=agricultor.hash_contrasena,
+                    estado="ACTIVO",
+                )
         return None
+
+    def actualizar_ultimo_acceso(self, id_usuario: str) -> None:
+        self.accesos.append(id_usuario)
 
     def guardar(self, agricultor: Agricultor) -> None:
         self.agricultores.append(agricultor)

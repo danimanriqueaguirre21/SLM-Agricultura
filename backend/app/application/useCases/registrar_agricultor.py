@@ -2,6 +2,7 @@ from app.domain.entities.agricultor import Agricultor
 from app.domain.exceptions import (
     ErrorContrasenaInvalida,
     ErrorCorreoDuplicado,
+    ErrorCorreoInvalido,
     ErrorDatosAgricultorInvalidos,
 )
 from app.domain.ports.input.registrar_agricultor_port import (
@@ -41,6 +42,8 @@ class RegistrarAgricultor(PuertoRegistrarAgricultor):
             raise ErrorContrasenaInvalida("La contraseña debe tener al menos 8 caracteres")
 
         email = Email(comando.email)
+        if len(email.value) > 150:
+            raise ErrorCorreoInvalido("El correo no puede superar 150 caracteres")
         if self._repositorio_agricultor.existe_por_correo(email):
             raise ErrorCorreoDuplicado("El correo electrónico ya está registrado")
 

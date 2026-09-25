@@ -37,7 +37,12 @@ class IniciarSesionAgricultor(PuertoIniciarSesionAgricultor):
             raise
 
         agricultor = self._repositorio_agricultor.buscar_por_correo(email)
-        if agricultor is None:
+        if (
+            agricultor is None
+            or agricultor.estado != "ACTIVO"
+            or agricultor.rol != "AGRICULTOR"
+            or not agricultor.id_agricultor
+        ):
             raise ErrorCredencialesInvalidas(CREDENCIALES_INVALIDAS)
 
         if not self._hasher_contrasena.verificar_contrasena(
@@ -45,17 +50,22 @@ class IniciarSesionAgricultor(PuertoIniciarSesionAgricultor):
         ):
             raise ErrorCredencialesInvalidas(CREDENCIALES_INVALIDAS)
 
+        self._repositorio_agricultor.actualizar_ultimo_acceso(agricultor.id_usuario)
+        partes_nombre = agricultor.nombre.strip().split(" ", 1)
+        nombres = partes_nombre[0]
+        apellidos = partes_nombre[1] if len(partes_nombre) > 1 else ""
+
         access_token = self._emisor_token.emitir_token(
-            sujeto=agricultor.id,
+            sujeto=agricultor.id_agricultor,
             claims={"email": agricultor.email.value},
         )
         return ResultadoIniciarSesionAgricultor(
             access_token=access_token,
             token_type="bearer",
             agricultor=AgricultorAutenticado(
-                id=agricultor.id,
-                nombres=agricultor.nombres,
-                apellidos=agricultor.apellidos,
+                id=agricultor.id_agricultor,
+                nombres=nombres,
+                apellidos=apellidos,
                 email=agricultor.email.value,
             ),
         )
