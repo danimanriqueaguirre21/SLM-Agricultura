@@ -32,6 +32,10 @@ chroma_test_data/
 **/.chroma/
 **/chroma_data/
 
+# Archivos generados por la ingesta de conocimiento
+knowledge/*.meta.json
+knowledge/[0-9a-f]*.md
+
 # OS / editor / temp
 .DS_Store
 Thumbs.db
