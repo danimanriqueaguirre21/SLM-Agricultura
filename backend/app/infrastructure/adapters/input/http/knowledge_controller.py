@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from app.domain.entities.documento_conocimiento import DocumentoConocimiento
@@ -17,6 +20,7 @@ from app.infrastructure.composition import CompositionRoot
 
 
 class IngestKnowledgeRequest(BaseModel):
+    fuente: str = Field(min_length=1, max_length=150)
     title: str = Field(min_length=1, max_length=DocumentoConocimiento.LONGITUD_MAXIMA_TITULO)
     topic: str = Field(min_length=1, max_length=DocumentoConocimiento.LONGITUD_MAXIMA_TEMA)
     content: str = Field(min_length=1, max_length=DocumentoConocimiento.LONGITUD_MAXIMA_CONTENIDO)
@@ -55,16 +59,17 @@ def _documento_response(resultado: ResultadoDocumentoConocimiento) -> KnowledgeD
 
 def create_knowledge_router(container: CompositionRoot) -> APIRouter:
     router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
+    bearer = HTTPBearer(auto_error=False)
 
     def require_authenticated_farmer(
-        authorization: str | None = Header(default=None),
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     ) -> str:
-        if not authorization or not authorization.lower().startswith("bearer "):
+        if credentials is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="No autenticado",
             )
-        token = authorization.split(" ", 1)[1].strip()
+        token = credentials.credentials.strip()
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -77,7 +82,13 @@ def create_knowledge_router(container: CompositionRoot) -> APIRouter:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=str(error),
             ) from error
-        return identity.agricultor_id
+        try:
+            return str(UUID(identity.agricultor_id))
+        except (ValueError, TypeError, AttributeError) as error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No autenticado",
+            ) from error
 
     @router.post(
         "/ingest",
@@ -92,6 +103,7 @@ def create_knowledge_router(container: CompositionRoot) -> APIRouter:
             titulo=payload.title,
             tema=payload.topic,
             contenido=payload.content,
+            fuente=payload.fuente,
         )
         try:
             result = container.puerto_incorporar_conocimiento.ejecutar(command)

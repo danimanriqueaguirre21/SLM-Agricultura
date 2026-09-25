@@ -20,6 +20,7 @@ class DocumentoConocimiento:
         hash_contenido: HashContenido,
         cantidad_fragmentos: int,
         incorporado_en: datetime,
+        fuente: str = "",
     ) -> None:
         self.id = documento_id
         self.titulo = titulo
@@ -28,6 +29,7 @@ class DocumentoConocimiento:
         self.hash_contenido = hash_contenido
         self.cantidad_fragmentos = cantidad_fragmentos
         self.incorporado_en = incorporado_en
+        self.fuente = fuente
 
     @classmethod
     def crear(

@@ -9,6 +9,7 @@ class ComandoIncorporarConocimiento:
     titulo: str
     tema: str
     contenido: str
+    fuente: str = ""
 
 
 @dataclass(frozen=True)

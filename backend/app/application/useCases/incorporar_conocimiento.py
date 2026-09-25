@@ -21,6 +21,9 @@ class IncorporarConocimiento(PuertoIncorporarConocimiento):
 
     def ejecutar(self, comando: ComandoIncorporarConocimiento) -> ResultadoDocumentoConocimiento:
         contenido = _contenido_validado(comando.contenido)
+        fuente = comando.fuente.strip()
+        if not fuente or len(fuente) > 150:
+            raise ErrorDocumentoConocimientoInvalido("La fuente es obligatoria y admite hasta 150 caracteres")
         hash_contenido = HashContenido.desde_contenido(contenido)
         if self._repositorio_conocimiento.existe_por_hash(hash_contenido):
             raise ErrorDocumentoConocimientoDuplicado(
@@ -32,6 +35,7 @@ class IncorporarConocimiento(PuertoIncorporarConocimiento):
             tema=comando.tema,
             hash_contenido=hash_contenido,
         )
+        documento.fuente = fuente
         self._repositorio_conocimiento.guardar(documento, contenido)
         return documento_a_resultado(documento, estado="registered")
 

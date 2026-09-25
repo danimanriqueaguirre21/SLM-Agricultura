@@ -63,8 +63,8 @@ from app.infrastructure.adapters.output.mysql.repositorio_consulta import Reposi
 from app.infrastructure.adapters.output.mysql.repositorio_contexto_agricola_postgresql import (
     RepositorioContextoAgricolaPostgresql,
 )
-from app.infrastructure.adapters.output.mysql.repositorio_documento_conocimiento import (
-    RepositorioDocumentoConocimientoMysql,
+from app.infrastructure.adapters.output.mysql.repositorio_documento_conocimiento_postgresql import (
+    RepositorioDocumentoConocimientoPostgresql,
 )
 from app.infrastructure.adapters.output.mysql.repositorio_evidencia import RepositorioEvidenciaMysql
 from app.infrastructure.adapters.output.security.emisor_token_jwt import EmisorTokenJwt
@@ -150,7 +150,7 @@ class CompositionRoot:
             repositorio_evidencia=self.puerto_repositorio_evidencia,
         )
         self.puerto_repositorio_documento_conocimiento: PuertoRepositorioDocumentoConocimiento = (
-            RepositorioDocumentoConocimientoMysql(
+            RepositorioDocumentoConocimientoPostgresql(
                 session_factory,
                 knowledge_dir=self.settings.knowledge_dir,
             )

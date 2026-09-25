@@ -1,6 +1,7 @@
 from app.application.services.fragmentador_documentos import FragmentadorDocumentos, FragmentoDocumento
 from app.domain.entities.documento_conocimiento import DocumentoConocimiento
-from app.domain.exceptions import ErrorArchivoConocimientoNoEncontrado
+from app.domain.exceptions import ErrorDocumentoConocimientoInvalido
+from app.domain.valueObjects.hash_contenido import HashContenido
 from app.domain.ports.input.incorporar_conocimiento_port import documento_a_resultado
 from app.domain.ports.input.indexar_conocimiento_port import (
     PuertoIndexarConocimiento,
@@ -8,7 +9,7 @@ from app.domain.ports.input.indexar_conocimiento_port import (
 )
 from app.domain.ports.output.embedding_port import EmbeddingPort
 from app.domain.ports.output.repositorio_documento_conocimiento_port import (
-    PuertoRepositorioDocumentoConocimiento,
+    PuertoCatalogoDocumental, FragmentoCatalogo,
 )
 from app.domain.ports.output.vector_store_port import VectorRecord, VectorStorePort
 
@@ -16,7 +17,7 @@ from app.domain.ports.output.vector_store_port import VectorRecord, VectorStoreP
 class IndexarConocimiento(PuertoIndexarConocimiento):
     def __init__(
         self,
-        repositorio_conocimiento: PuertoRepositorioDocumentoConocimiento,
+        repositorio_conocimiento: PuertoCatalogoDocumental,
         embedding_port: EmbeddingPort,
         almacen_vectores: VectorStorePort,
         fragmentador: FragmentadorDocumentos,
@@ -27,13 +28,15 @@ class IndexarConocimiento(PuertoIndexarConocimiento):
         self._fragmentador = fragmentador
 
     def ejecutar(self) -> ResultadoIndexarConocimiento:
+        with self._repositorio_conocimiento.bloquear_indexacion():
+            return self._ejecutar_bloqueado()
+
+    def _ejecutar_bloqueado(self) -> ResultadoIndexarConocimiento:
         documentos = self._repositorio_conocimiento.listar_todos()
         indexados: list[DocumentoConocimiento] = []
         total_fragmentos = 0
         for documento in documentos:
             fragmentos = self._indexar_documento(documento)
-            if fragmentos is None:
-                continue
             total_fragmentos += len(fragmentos)
             documento.cantidad_fragmentos = len(fragmentos)
             self._repositorio_conocimiento.actualizar_cantidad_fragmentos(
@@ -50,14 +53,15 @@ class IndexarConocimiento(PuertoIndexarConocimiento):
 
     def _indexar_documento(
         self, documento: DocumentoConocimiento
-    ) -> list[FragmentoDocumento] | None:
-        try:
-            contenido = self._repositorio_conocimiento.leer_contenido(documento)
-        except (FileNotFoundError, ErrorArchivoConocimientoNoEncontrado):
-            return None
+    ) -> list[FragmentoDocumento]:
+        contenido = self._repositorio_conocimiento.leer_contenido(documento)
+        if HashContenido.desde_contenido(contenido) != documento.hash_contenido:
+            raise ErrorDocumentoConocimientoInvalido("El contenido cambió; no se puede reindexar")
         fragmentos = self._fragmentador.fragmentar(contenido, documento)
         if not fragmentos:
-            return []
+            raise ErrorDocumentoConocimientoInvalido("El documento no contiene fragmentos")
+        catalogo = [FragmentoCatalogo(f.fragmento_id, f.contenido, f.indice_fragmento) for f in fragmentos]
+        ids = self._repositorio_conocimiento.preparar_fragmentos(documento.id, catalogo)
         embeddings = self._embedding_port.embed_texts(
             [fragmento.contenido for fragmento in fragmentos]
         )
@@ -68,6 +72,7 @@ class IndexarConocimiento(PuertoIndexarConocimiento):
                 content=fragmento.contenido,
                 metadata={
                     "document_id": fragmento.documento_id,
+                    "fragment_id": fragmento_uuid,
                     "document_title": fragmento.titulo,
                     "topic": fragmento.tema,
                     "content_hash": fragmento.hash_contenido,
@@ -75,7 +80,8 @@ class IndexarConocimiento(PuertoIndexarConocimiento):
                     "source_path": fragmento.ruta_origen,
                 },
             )
-            for fragmento, embedding in zip(fragmentos, embeddings, strict=True)
+            for fragmento, embedding, fragmento_uuid in zip(fragmentos, embeddings, ids, strict=True)
         ]
         self._almacen_vectores.upsert(registros)
+        self._repositorio_conocimiento.confirmar_fragmentos(documento.id, catalogo)
         return fragmentos

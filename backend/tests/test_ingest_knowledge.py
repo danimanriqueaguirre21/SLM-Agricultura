@@ -59,7 +59,7 @@ def _caso_de_uso() -> tuple[IncorporarConocimiento, RepositorioConocimientoEnMem
 def test_ingest_knowledge_success() -> None:
     use_case, repository = _caso_de_uso()
     result = use_case.ejecutar(
-        ComandoIncorporarConocimiento(titulo="Riego de papa", tema="papa", contenido=CONTENT)
+        ComandoIncorporarConocimiento(fuente="Material de prueba local", titulo="Riego de papa", tema="papa", contenido=CONTENT)
     )
     assert result.estado == "registered"
     assert result.titulo == "Riego de papa"
@@ -74,7 +74,7 @@ def test_ingest_knowledge_empty_content() -> None:
     use_case, _repository = _caso_de_uso()
     with pytest.raises(ErrorDocumentoConocimientoInvalido, match="contenido"):
         use_case.ejecutar(
-            ComandoIncorporarConocimiento(titulo="Riego", tema="papa", contenido="   ")
+            ComandoIncorporarConocimiento(fuente="Material de prueba local", titulo="Riego", tema="papa", contenido="   ")
         )
 
 
@@ -82,7 +82,7 @@ def test_ingest_knowledge_invalid_content_too_long() -> None:
     use_case, _repository = _caso_de_uso()
     with pytest.raises(ErrorDocumentoConocimientoInvalido, match="longitud"):
         use_case.ejecutar(
-            ComandoIncorporarConocimiento(
+            ComandoIncorporarConocimiento(fuente="Material de prueba local",
                 titulo="Riego",
                 tema="papa",
                 contenido="a" * (DocumentoConocimiento.LONGITUD_MAXIMA_CONTENIDO + 1),
@@ -102,13 +102,13 @@ def test_content_hash_is_deterministic() -> None:
 
 def test_ingest_knowledge_duplicate_content() -> None:
     use_case, repository = _caso_de_uso()
-    command = ComandoIncorporarConocimiento(
+    command = ComandoIncorporarConocimiento(fuente="Material de prueba local",
         titulo="Riego de papa", tema="papa", contenido=CONTENT
     )
     use_case.ejecutar(command)
     with pytest.raises(ErrorDocumentoConocimientoDuplicado, match="ya está registrado"):
         use_case.ejecutar(
-            ComandoIncorporarConocimiento(titulo="Copia de riego", tema="papa", contenido=CONTENT)
+            ComandoIncorporarConocimiento(fuente="Material de prueba local", titulo="Copia de riego", tema="papa", contenido=CONTENT)
         )
     assert len(repository.documentos) == 1
 
@@ -116,7 +116,7 @@ def test_ingest_knowledge_duplicate_content() -> None:
 def test_ingest_knowledge_persists_document_and_content() -> None:
     use_case, repository = _caso_de_uso()
     result = use_case.ejecutar(
-        ComandoIncorporarConocimiento(titulo="Riego de papa", tema="papa", contenido=CONTENT)
+        ComandoIncorporarConocimiento(fuente="Material de prueba local", titulo="Riego de papa", tema="papa", contenido=CONTENT)
     )
     stored = repository.buscar_por_id(result.id)
     assert stored is not None
